@@ -1,4 +1,4 @@
-Graphics::MNG version 0.01
+Graphics::MNG version 0.02
 ==========================
 
 
@@ -38,12 +38,12 @@ SYNOPSIS
 
 DESCRIPTION
 
-   This software is pre-alpha.  Use at your own risk.
+   This is alpha stage software.  Use at your own risk.
 
    Please visit http://www.libmng.com/ to learn all about the new 
    MNG format.
 
-   MNG (which stands for Moving Network Graphics) is a spin-off of 
+   MNG (which stands for Multiple Network Graphics) is a spin-off of 
    the PNG format, which is already gaining popularity over the 
    GIF format. MNG adds the aspect of animation that PNG lacks.
 
@@ -57,7 +57,7 @@ DESCRIPTION
 
    The Graphics::MNG module is an attempt to provide an "accurate"
    interface to the MNG graphics library.  This means that the Perl
-   functions supported in this module should look very much like the
+   methods supported in this module should look very much like the
    functions in the MNG library interface.
 
    This module supports both a functional and an OO interface to the 
@@ -96,14 +96,8 @@ EXPORTABLE CONSTANTS
 
 INTERFACE FUNCTIONS/METHODS
 
-   In some cases it is convenient to change the Perl interface to make 
-   it more convenient to use from within Perl.  A good example of this 
-   is any mng_get*() functions that returned values via pointers in the 
-   parameter list.  Most or all of these will return an array of values, 
-   and will only accept the input parameters.
-
    The OO-I/F is the same as the functional interface, except that you
-   new() your handle into existence, and you undef() it out.  Oh, and 
+   new() your handle into existence, and you undef() it out.  Also,
    you don't pass it as the first parameter to any of the methods -- 
    that's done for you when you use the -> calling syntax to call a
    method.
@@ -111,12 +105,73 @@ INTERFACE FUNCTIONS/METHODS
    There are a *lot* of interface functions in the MNG library.  I'd 
    love to list them all here, but you're really better off opening up 
    the libmng.h file, related documentation, or the Graphics/MNG.pm file 
-   and looking at the list of exported functions.  I'll try to make a 
-   list here of the functions that deviate in interface characteristics 
+   and looking at the list of exported methods.  I'll try to make a 
+   list here of the methods that deviate in interface characteristics 
    from those found in the MNG library itself.
 
    I doubt that I've implemented the Perl interface correctly for all 
    of them.  You will find bugs.  Sorry about that.
+
+   In some cases it is convenient to change the Perl interface to make 
+   it more convenient to use from within Perl.  A good example of this 
+   is any mng_get*() methods that returned values via pointers in the 
+   parameter list.  Most or all of these will return a list of values 
+   (with the status as the first element), and will only accept the
+   input parameters.  On error, only the status code is returned.
+
+   The method getlasterror() behaves in a similiar manner, except that
+   it will return the list of parameters only when there is an error.
+   Otherwise, it just returns the status (in this case MNG_NOERROR).
+
+   The method initialize() currently takes only one argument -- a
+   scalar (typically a reference) to user data.  If the MNG library is
+   compiled with MNG_INTERNAL_MEMMNGMT, then this Perl interface will
+   provide default memory allocation support.  You can use other
+   interface methods to enable/disable trace support.
+
+   I've also added some new methods to the interface:
+   my ($name, $type) = getchunk_name([$hHandle,] $iChunktype);
+   my ($rv, $href)   = getchunk_info($hHandle, $hChunk, $iChunktype)
+   my ($rv)          = putchunk_info($hHandle, [$iChunktype,] \%chunkHash)
+
+   -getchunk_name():
+   This method takes the chunktype and returns the ASCII name of the 
+   chunk, and also a string containing the hexadecimal representation of
+   the chunktype.  The $hHandle argument optional (to support the OO-I/F),
+   but is not used.  Consider this to be a class method.
+
+   -getchunk_info():
+   This method uses the $iChunktype parameter to look up the correct
+   getchunk_*() method to call on the $hHandle object to get the chunk
+   information related to $hChunk.  It returns a list of status and a
+   hash reference containing all of the chunk information.  If called in a
+   scalar context, an array reference containing this list is returned.
+   The key names of the hash correspond to the libmng parameter names for
+   the appropriate mng_getchunk_*() function.
+
+   There are two additional fields added to the returned hash:
+      'iChunktype' : the type as passed in by $iChunktype
+      'pChunkname' : the chunk name (from getchunk_name($iChunktype))
+
+   This hash reference can be passed directly to putchunk_info().
+
+   -putchunk_info():
+   This method uses the $iChunktype parameter to look up the correct
+   putchunk_*() method to call on the $hHandle object.  The key names
+   of the hash must correspond to the libmng parameter names for the
+   mng_putchunk_*() function that will be called.
+
+   If the $iChunktype parameter is excluded, then the hash is examined
+   for a field named 'iChunktype'.
+
+   If any fields are excluded, they default to '0', which (before
+   presentation to the libmng interface)will translate to a string for
+   array and pointer types, and will translate to zero for integer types.
+   This seems safe because most arrays and pointer types are accompanied
+   by a length field, which will also default to zero if it is excluded.
+
+   This method is mostly useful for directly copying chunks from one file 
+   to another in conjunction with the getchunk_info() method.
 
 
 LIMITATIONS
@@ -126,9 +181,13 @@ LIMITATIONS
    That means that you'll be working with callback functions.  Depending 
    on your point of view, that's a limitation.
 
-   This Perl module is in the pre-alpha stage.  That means that you'll 
-   be lucky to compile it, let alone use it effectively without tripping 
-   over bugs.
+   If you want to write a file with the MNG library, you'll have to call
+   create() before writing chunks.  That's just how libmng works.  If you
+   forget, you'll be disappointed with the results.
+
+   This Perl module is in the alpha stage of development.  That means that
+   you'll be lucky to compile it, let alone use it effectively without
+   tripping over bugs.
 
    The MNG library has limitations of its own, please visit the MNG 
    homepage to learn about them.
@@ -165,15 +224,17 @@ INSTALLATION
 
 KNOWN BUGS
 
-   I haven't successfully created a file with this interface (yet).
+   I have successfully read and written MNG files with this interface.
+   If you can't write (simple) MNG files, you may be doing something wrong.
+   See the section LIMITATIONS for related topics.
 
    You may have noticed that the "mng_" prefix has been removed from all of
    the functions.  This was done to make the OO-I/F look prettier.  However,
    if you import the functional interface, you'll get read() and write()
-   in your namespace, thus clashing with Perl's built-in functions.  I need
-   to provide an alternate name for these.  In the meantime, I suggest that
-   you use sysread() and syswrite() in your callbacks.  Even better, use
-   the OO-I/F and don't import qw(:fns).
+   in your namespace, thus clashing with Perl's built-in functions.  I may 
+   change the name for these in the future (i.e. an interface deviation).
+   In the meantime, I suggest that you use sysread() and syswrite() in your
+   callbacks.  Even better, use the OO-I/F and don't import qw(:fns).  
 
    I'm developing exclusively on Win32 for right now, although everything
    *should* work well for any other platform that the MNG library
@@ -202,12 +263,10 @@ AUTHOR
 
 SUPPORT
 
-   The '.com' at the end of my email address means that I work for a
-   living.
-
-   If you see a problem, try to fix it.  If you can fix it, write a 
-   test  case for it.  If you get all of that done, send me the fix 
-   and the test  case, and I'll include it in the next release.
+   I'd love to support this interface full time, but my work schedule won't
+   allow that.  If you see a problem, try to fix it.  If you can fix it,
+   write a test case for it.  If you get all of that done, send me the fix 
+   and the test case, and I'll include it in the next release.
 
    If you can't fix it, or don't know how to test it, go ahead and send 
    me some email.  I'll see what I can do.
@@ -243,5 +302,10 @@ COPYRIGHT AND LICENCE
 
 SEE ALSO
 
-L<perl>.
+   L<perl>.
+   The Gd module.
+   The PNG homepage:      http://www.libpng.org/pub/png/
+   The PNG specification: http://www.libpng.org/pub/png/spec/
+   The MNG homepage:      http://www.libmng.com/
+   The MNG specification: http://www.libpng.org/pub/mng/spec/
 
