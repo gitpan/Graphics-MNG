@@ -1,0 +1,6 @@
+Revision history for Perl extension Graphics::MNG.
+
+0.01  Fri Aug 10 20:09:48 2001
+	- original version; created by h2xs 1.21 with options
+		-Oamx -n Graphics::MNG -F ' -DMNG_FULL_CMS -DMNG_USE_SO -DNON_WINDOWS -I.. ' -M '^[mM][nN][gG]_' libmng.h libmng_types.h libmng_conf.h -llibmng.lib
+
