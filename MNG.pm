@@ -26,21 +26,16 @@ use Carp;
 require Exporter;
 require DynaLoader;
 use AutoLoader;
-use Data::Dumper;
+use FileHandle;
 
 our @ISA = qw(Exporter DynaLoader);
-
-# forward declare some subroutines
-sub MNG_PNG_VERSION();
-sub MNG_MNG_VERSION();
-
 
 
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 
-# This allows declaration	use Graphics::MNG ':all';
+# This allows declaration use Graphics::MNG ':all';
 # If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
 # will save memory.
 our %EXPORT_TAGS = (
@@ -700,6 +695,18 @@ our %EXPORT_TAGS = (
 
    ) ],
 
+   'util_fns' => [ qw(
+      FileOpenStream
+      FileCloseStream
+      FileReadData
+      FileReadHeader
+      FileReadChunks
+      FileWriteData
+      FileWriteChunks
+      FileIterateChunks
+   ) ],
+
+
    'chunk_fns' => [ qw(
       getchunk_ihdr
       getchunk_plte
@@ -818,55 +825,64 @@ our %EXPORT_TAGS = (
 our @EXPORT_OK = ( @{ %EXPORT_TAGS->{'all'} }, '%EXPORT_TAGS' );
 our @EXPORT    = (
                     @{ %EXPORT_TAGS->{'constants'} },
-                    qw(getchunk_name)  # this can be a class or object method :)
+                    'error_as_string',
                  );
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
+#---------------------------------------------------------------------------
 sub AUTOLOAD {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.  If a constant is not found then control is passed
-    # to the AUTOLOAD in AutoLoader.
+   # This AUTOLOAD is used to 'autoload' constants from the constant()
+   # XS function.  If a constant is not found then control is passed
+   # to the AUTOLOAD in AutoLoader.
 
-    my $constname;
-    our $AUTOLOAD;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
-    croak "& not defined" if $constname eq 'constant';
-    my $val = constant($constname, @_ ? $_[0] : 0);
-    if ($! != 0) {
-	if ($! =~ /Invalid/ || $!{EINVAL}) {
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    croak "Your vendor has not defined Graphics::MNG macro $constname";
-	}
-    }
-    {
-	no strict 'refs';
-#	# Fixed between 5.005_53 and 5.005_61
-#	if ($] >= 5.00561) {
-#	    *$AUTOLOAD = sub () { $val };
-#	}
-#	else {
-	    *$AUTOLOAD = sub { $val };
-#	}
-    }
-    goto &$AUTOLOAD;
+   my $constname;
+   our $AUTOLOAD;
+   ($constname = $AUTOLOAD) =~ s/.*:://;
+   croak "& not defined" if $constname eq 'constant';
+   my $val = constant($constname, @_ ? $_[0] : 0);
+   if ($! != 0) {
+      if ($! =~ /Invalid/ || $!{EINVAL}) {
+         $AutoLoader::AUTOLOAD = $AUTOLOAD;
+         goto &AutoLoader::AUTOLOAD;
+      }
+      else {
+          croak "Your vendor has not defined Graphics::MNG macro $constname";
+      }
+   }
+   {
+   	no strict 'refs';
+   #	# Fixed between 5.005_53 and 5.005_61
+   #	if ($] >= 5.00561) {
+   #	    *$AUTOLOAD = sub () { $val };
+   #	}
+   #	else {
+   	    *$AUTOLOAD = sub { $val };
+   #	}
+   }
+   goto &$AUTOLOAD;
 }
 
+#---------------------------------------------------------------------------
 bootstrap Graphics::MNG $VERSION;
+
+# Package private variables go here.
+my %retcode_to_string = ();
 
 # Preloaded methods go here.
 
+# This can't be a BEGIN block because our XS component isn't loaded yet.
 # BEGIN
 {
    use warnings::register qw(%Offsets);
    my $packageName = __PACKAGE__;
    my $warn_category = %warnings::Offsets->{$packageName};
    set_warn_category($warn_category);
+
+   %retcode_to_string = map { eval("$_()") => $_ } ( @{ %EXPORT_TAGS->{'errors'} } );
 }
 
+#---------------------------------------------------------------------------
 sub new(;$$)
 {
    my ($proto,$data) = @_;
@@ -876,6 +892,7 @@ sub new(;$$)
    return $self;
 }
 
+#---------------------------------------------------------------------------
 sub DESTROY($)
 {
    my ( $self ) = @_;
@@ -889,7 +906,9 @@ sub DESTROY($)
 
 
 
-# convenience functions
+#---------------------------------------------------------------------------
+#- Convenience functions
+#---------------------------------------------------------------------------
 
 sub MNG_CANVAS_PIXELTYPE($)  { $_[0] & 0x000000FF }
 sub MNG_CANVAS_BITDEPTH($)   { $_[0] & 0x00000100 }
@@ -912,7 +931,14 @@ sub MNG_MNG_VERSION() { MNG_MNG_VERSION_MAJ() . '.' . MNG_MNG_VERSION_MIN() };
 
 
 
+#---------------------------------------------------------------------------
+sub error_as_string($$)
+{
+   my ($status) = pop @_;
+   return (%retcode_to_string->{$status} || '');
+}
 
+#---------------------------------------------------------------------------
 sub getchunk_name($;$)
 {
    # take only the last argument
@@ -932,6 +958,7 @@ sub getchunk_name($;$)
    return ($name, $type);
 }
 
+#---------------------------------------------------------------------------
 sub getchunk_info($$$)
 {
    my ($hHandle,$hChunk,$iChunktype) = @_;
@@ -1046,6 +1073,7 @@ sub getchunk_info($$$)
 }
 
 
+#---------------------------------------------------------------------------
 sub putchunk_info($;$$)
 {
    my ($hHandle,$chunktype,$args) = @_;
@@ -1146,8 +1174,8 @@ sub putchunk_info($;$$)
 
    my @fn_info = @{ %enum_to_fn->{$chunktype} };
    my $fn_ptr  = shift @fn_info;
-   my @args = map { $args->{$_} || '0' } @fn_info;  # hopefully '0' is a good default for most types...
-   my $rv   = &{ $fn_ptr }($hHandle, @args);
+   my @args    = map { $args->{$_} || '0' } @fn_info;  # hopefully '0' is always a good default...
+   my $rv      = &{ $fn_ptr }($hHandle, @args);
 
    return $rv;
 }
@@ -1155,9 +1183,170 @@ sub putchunk_info($;$$)
 
 
 
+#---------------------------------------------------------------------------
+#- Utility Functions
+#---------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
+sub FileReadData # ($$$$)
+{
+   my ( $hHandle, $pBuf, $iSize, $pRead ) = @_;
+   my ( $userdata ) = $hHandle->get_userdata();
+   $$pRead = sysread( $userdata->{'fh'}, $$pBuf, $iSize );
+   return MNG_TRUE();
+}
+
+#---------------------------------------------------------------------------
+sub FileWriteData # ($$$$)
+{
+   my ( $hHandle, $pBuf, $iBuflen, $pWritten ) = @_;
+   my ( $userdata ) = $hHandle->get_userdata();
+   $$pWritten = syswrite($userdata->{'fh'}, $pBuf, $iBuflen);
+   return MNG_TRUE();
+}
+
+#---------------------------------------------------------------------------
+sub FileReadHeader # ($$$)
+{
+   my ( $hHandle, $iWidth, $iHeight ) = @_;
+   my ( $userdata ) = $hHandle->get_userdata();
+   @$userdata{'width','height'} = ($iWidth,$iHeight);
+   return MNG_TRUE();
+}
+
+#---------------------------------------------------------------------------
+sub FileOpenStream # ($)
+{
+   my ( $hHandle  ) = @_;
+   my ( $userdata ) = $hHandle->get_userdata();
+   my ( $fn       ) = $userdata->{'filename'};
+   my ( $fperms   ) = $userdata->{'fperms'} || 'r';
+   my ( $rv       ) = MNG_FALSE();
+
+   my $fh = $userdata->{'fh'} = new FileHandle( $fn, $fperms );
+
+   if ( defined $fh )
+   {
+      $fh->autoflush(1);
+      binmode($fh);
+      return MNG_TRUE();
+   }
+
+   warnings::warnif($hHandle,__PACKAGE__ . "::OpenStream(): Failed to open '$fn'\n");
+   return MNG_FALSE();
+}
+
+#---------------------------------------------------------------------------
+sub FileCloseStream # ($)
+{
+   my ( $hHandle  ) = @_;
+   my ( $userdata ) = $hHandle->get_userdata();
+   (delete $userdata->{'fh'})->close();
+   return MNG_TRUE();
+}
+
+#---------------------------------------------------------------------------
+sub FileIterateChunks # ($$$$)
+{
+   my ( $hHandle, $hChunk, $iChunktype, $iChunkseq ) = @_;
+   my ( $userdata    ) = $hHandle->get_userdata();
+   my ( $name, $type ) = $hHandle->getchunk_name($iChunktype);
+   my ( $rv,   $info ) = $hHandle->getchunk_info($hChunk,$iChunktype);
+
+   $info ||= {};                             # provide a default hash ref
+   %$info->{'iChunkseq'} = $iChunkseq;       # add the sequence information
+   push( @{$userdata->{'chunks'}}, $info )   # store the chunk
+      if defined $rv && $rv==MNG_NOERROR();
+
+   # provide for default arrays
+   $userdata->{'PLTE'} ||= [];
+   $userdata->{'tRNS'} ||= [];
+
+   # Store the palette and transparency information
+   push( @{ $userdata->{'PLTE'} }, $info ) if( $name eq 'PLTE' );
+   push( @{ $userdata->{'tRNS'} }, $info ) if( $name eq 'tRNS' );
+
+   # always return MNG_TRUE so we can capture all of the chunks
+   return MNG_TRUE();
+}
+
+#---------------------------------------------------------------------------
+sub FileReadChunks($;$)
+{
+   my ( $fn, $iterFn ) = @_;
+   my ( $rv );
+
+   my $obj = Graphics::MNG::new();
+   return MNG_INTERNALERROR() unless defined $obj;
+
+   # populate the user data
+   $obj->set_userdata( { 'filename' => $fn,
+                         'fh'       => undef,
+                         'fperms'   => 'r',
+                         'width'    => 0,
+                         'height'   => 0,
+                         'chunks'   => [],
+                       } );
+
+   # hook the callbacks...
+   $rv ||= $obj->setcb_openstream   ( \&FileOpenStream  );
+   $rv ||= $obj->setcb_closestream  ( \&FileCloseStream );
+   $rv ||= $obj->setcb_processheader( \&FileReadHeader  );
+   $rv ||= $obj->setcb_readdata     ( \&FileReadData    );
+
+   # read the file into memory, and iterate through the chunk list
+   $rv ||= $obj->read();
+   $rv ||= $obj->iterate_chunks(0, $iterFn ? $iterFn : \&FileIterateChunks );
+
+   return ($rv,$obj);
+}
+
+#---------------------------------------------------------------------------
+sub FileWriteChunks($$)
+{
+   my ( $fn, $chunkRef ) = @_;
+   my ( $rv );
+
+   my $obj = Graphics::MNG::new();
+   return MNG_INTERNALERROR() unless defined $obj;
+
+   warnings::warnif(__PACKAGE__,"Type of arg 2 to " . __PACKAGE__ . "::FileWriteChunks() must be array ref\n")
+      unless defined $chunkRef and ref $chunkRef eq 'ARRAY';
+
+   my $userdata;
+   $obj->set_userdata( $userdata = 
+                       { 'filename' => $fn,
+                         'fh'       => undef,
+                         'fperms'   => 'w+',
+                         'width'    => 0,
+                         'height'   => 0,
+                       } );
+
+   # hook the callbacks and indicate that we're going to make a new file...
+
+   $rv ||= $obj->setcb_openstream ( \&FileOpenStream  );
+   $rv ||= $obj->setcb_closestream( \&FileCloseStream );
+   $rv ||= $obj->setcb_writedata  ( \&FileWriteData   );
+   $rv ||= $obj->create();
+
+   # now see if we can write out all of those chunks...
+   foreach my $chunk ( @$chunkRef )
+   {
+      $rv ||= $obj->putchunk_info($chunk);
+      last unless $rv==MNG_NOERROR();
+   }
+
+   # now write the file
+   $rv ||= $obj->write();
+
+   return $rv;
+}
 
 
-# Autoload methods go after =cut, and are processed by the autosplit program.
+
+#---------------------------------------------------------------------------
+#- Autoload methods go after =cut, and are processed by the autosplit program.
+#---------------------------------------------------------------------------
 
 1;
 __END__
@@ -1203,8 +1392,8 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
    Please visit http://www.libmng.com/ to learn all about the new 
    MNG format.
 
-   MNG (which stands for Multiple Network Graphics) is a spin-off of 
-   the PNG format, which is already gaining popularity over the 
+   MNG (which stands for Multiple Network Graphics) is an extension  
+   of the PNG format, which is already gaining popularity over the 
    GIF format. MNG adds the aspect of animation that PNG lacks.
 
    The Gd module (by Lincoln Stein) supports PNG formats, but MNG is 
@@ -1248,6 +1437,8 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
    :errors            -- constants returned as error values
    :fns               -- functions for the MNG functional interface
    :misc              -- constants misc.  (MNG_SUSPEND*)
+   :util_fns          -- pure PERL default implementations of callback
+                         functions (see section "UTILITY FUNCTIONS" below)
    :version           -- functions to return various version numbers
                          (MNG,PNG,draft,etc.)
    :IJG               -- constants IJG parameters for compression
@@ -1285,53 +1476,116 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
 
    The method initialize() currently takes only one argument -- a
    scalar (typically a reference) to user data.  If the MNG library is
-   compiled with MNG_INTERNAL_MEMMNGMT, then this Perl interface will
-   provide default memory allocation support.  You can use other
+   not compiled with MNG_INTERNAL_MEMMNGMT, then this Perl interface 
+   will provide default memory allocation support.  You can use other
    interface methods to enable/disable trace support.
 
+
+
    I've also added some new methods to the interface:
+   my ($texterror)   = error_as_string([$hHandle,] MNG_NOERROR());
    my ($name, $type) = getchunk_name([$hHandle,] $iChunktype);
    my ($rv, $href)   = getchunk_info($hHandle, $hChunk, $iChunktype)
    my ($rv)          = putchunk_info($hHandle, [$iChunktype,] \%chunkHash)
 
-   -getchunk_name():
-   This method takes the chunktype and returns the ASCII name of the 
-   chunk, and also a string containing the hexadecimal representation of
-   the chunktype.  The $hHandle argument optional (to support the OO-I/F),
-   but is not used.  Consider this to be a class method.
+   - error_as_string():
+     This method takes an mng_retcode and translates it into the
+     corresponding string.  For example, 0 => 'MNG_NOERROR'.
+     This class method may also be called as a function.
+  
+   - getchunk_name():
+     This method takes the chunktype and returns the ASCII name of the 
+     chunk, and also a string containing the hexadecimal representation 
+     of the chunktype.  This class method may also be called as a
+     function.
 
-   -getchunk_info():
-   This method uses the $iChunktype parameter to look up the correct
-   getchunk_*() method to call on the $hHandle object to get the chunk
-   information related to $hChunk.  It returns a list of status and a
-   hash reference containing all of the chunk information.  If called in a
-   scalar context, an array reference containing this list is returned.
-   The key names of the hash correspond to the libmng parameter names for
-   the appropriate mng_getchunk_*() function.
+   - getchunk_info():
+     This method uses the $iChunktype parameter to look up the correct
+     getchunk_*() method to call on the $hHandle object to get the chunk
+     information related to $hChunk.  It returns a list of status and a
+     hash reference containing all of the chunk information.  If called 
+     in a scalar context, an array reference containing this list is 
+     returned.  The key names of the hash correspond to the libmng 
+     parameter names for the appropriate mng_getchunk_*() function.
+  
+     There are two additional fields added to the returned hash:
+        'iChunktype' : the type as passed in by $iChunktype
+        'pChunkname' : the chunk name (from getchunk_name($iChunktype))
+  
+     This hash reference can be passed directly to putchunk_info().
 
-   There are two additional fields added to the returned hash:
-      'iChunktype' : the type as passed in by $iChunktype
-      'pChunkname' : the chunk name (from getchunk_name($iChunktype))
+   - putchunk_info():
+     This method uses the $iChunktype parameter to look up the correct
+     putchunk_*() method to call on the $hHandle object.  The key names
+     of the hash must correspond to the libmng parameter names for the
+     mng_putchunk_*() function that will be called.
+  
+     If the $iChunktype parameter is excluded, then the hash is examined
+     for a field named 'iChunktype'.
+  
+     If any fields are excluded, they default to '0', which (before
+     presentation to the libmng interface) will translate to a string 
+     for array and pointer types, and will translate to zero for integer 
+     types.  This seems safe because most arrays and pointer types are 
+     accompanied by a length field, which will also default to zero if
+     it is excluded.
+  
+     This method is mostly useful for directly copying chunks from one 
+     file to another in conjunction with the getchunk_info() method.
 
-   This hash reference can be passed directly to putchunk_info().
+=head1 UTILITY FUNCTIONS
 
-   -putchunk_info():
-   This method uses the $iChunktype parameter to look up the correct
-   putchunk_*() method to call on the $hHandle object.  The key names
-   of the hash must correspond to the libmng parameter names for the
-   mng_putchunk_*() function that will be called.
+   This section documents the list of added interfaces provided by the
+   MNG module which do not exist in libmng.  They have been added for
+   your convenience.  They can be imported under the ':util_fns' tag.
 
-   If the $iChunktype parameter is excluded, then the hash is examined
-   for a field named 'iChunktype'.
+   - FileOpenStream( $hHandle )
+     This is a default callback implementation for use with
+     setcb_openstream.
 
-   If any fields are excluded, they default to '0', which (before
-   presentation to the libmng interface)will translate to a string for
-   array and pointer types, and will translate to zero for integer types.
-   This seems safe because most arrays and pointer types are accompanied
-   by a length field, which will also default to zero if it is excluded.
+   - FileCloseStream( $hHandle )
+     This is a default callback implementation for use with
+     setcb_closestream.
 
-   This method is mostly useful for directly copying chunks from one file 
-   to another in conjunction with the getchunk_info() method.
+   - FileReadData( $hHandle, \$pBuf, $iSize, \$pRead )
+     This is a default callback implementation for use with
+     setcb_readdata.
+
+   - FileReadHeader( $hHandle, $iWidth, $iHeight )
+     This is a default callback implementation for use with
+     setcb_processheader.
+
+   - FileWriteData( $hHandle, $pBuf, $iBuflen, \$pWritten )
+     This is a default callback implementation for use with
+     setcb_writedata.
+
+   - FileIterateChunks( $hHandle, $hChunk, $iChunktype, $iChunkseq )
+     This is a default callback implementation for use with
+     iterate_chunks.
+
+   - FileReadChunks( $filename [, \&iteration_function] )
+
+     NOTE: This is not an object method.
+
+     This is a convenience function which will return a list of two
+     elements (status, MNG object). The userdata portion of the
+     returned MNG object will contain the following keys:
+
+     'filename' => <filename>,
+     'width'    => <width of image>,
+     'height'   => <height of image>,
+     'chunks'   => [ <list of image chunks> ],
+
+     You can specify your own chunk iteration function, or you can leave
+     it out and the default (FileIterateChunks()) will be used.
+
+   - FileWriteChunks( $filename, \@chunks )
+
+     NOTE: This is not an object method.
+
+     This is a convenience function which will accept a list of image 
+     chunks (as returned by FileReadChunks) and will write them to the
+     specified filename.  The status of the entire operation is returned.
 
 
 =head1 LIMITATIONS
@@ -1341,15 +1595,15 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
    That means that you'll be working with callback functions.  Depending 
    on your point of view, that's a limitation.
 
-   If you want to write a file with the MNG library, you'll have to call
-   create() before writing chunks.  That's just how libmng works.  If you
-   forget, you'll be disappointed with the results.
+   If you want to write a file with the MNG library, you'll have to
+   call create() before writing chunks.  That's just how libmng works.
+   If you forget, you'll be disappointed with the results.
 
-   This Perl module is in the alpha stage of development.  That means that
-   you'll be lucky to compile it, let alone use it effectively without
-   tripping over bugs.
+   This Perl module is in the alpha stage of development.  That means
+   that you'll be lucky to compile it, let alone use it effectively
+   without tripping over bugs.
 
-   The MNG library has limitations of its own, please visit the MNG 
+   The MNG library may have limitations of its own, please visit the MNG 
    homepage to learn about them.
 
 
@@ -1371,7 +1625,7 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
 
 =head1 INSTALLATION
 
-   Since this is pre-alpha software...
+   Since this is alpha software...
    - compile the MNG as a static library (Win32) or as a shared library
    - edit Makefile.PL as appropriate for your header file and lib paths
 
@@ -1406,29 +1660,30 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
 =head1 KNOWN BUGS
 
    I have successfully read and written MNG files with this interface.
-   If you can't write (simple) MNG files, you may be doing something wrong.
-   See the section LIMITATIONS for related topics.
+   If you can't write (simple) MNG files, you may be doing something
+   wrong.  See the section LIMITATIONS for related topics.
 
-   You may have noticed that the "mng_" prefix has been removed from all of
-   the functions.  This was done to make the OO-I/F look prettier.  However,
-   if you import the functional interface, you'll get read() and write()
-   in your namespace, thus clashing with Perl's built-in functions.  I may 
-   change the name for these in the future (i.e. an interface deviation).
-   In the meantime, I suggest that you use sysread() and syswrite() in your
-   callbacks.  Even better, use the OO-I/F and don't import qw(:fns).  
+   You may have noticed that the "mng_" prefix has been removed from
+   all of the functions.  This was done to make the OO-I/F look
+   prettier.  However, if you import the functional interface, you'll
+   get read() and write() in your namespace, thus clashing with Perl's
+   built-in functions.  I may change the name for these in the future
+   (i.e. an interface deviation).  In the meantime, I suggest that you
+   use sysread() and syswrite() in your callbacks.  Even better, use
+   the OO-I/F and don't import qw(:fns).
 
-   I'm developing exclusively on Win32 for right now, although everything
+   I'm developing exclusively on Win32 for now, although everything
    *should* work well for any other platform that the MNG library
    supports.
 
-   I'm pretty sure that I have *not* gotten all of the appropriate #ifdef
-   protection around parts of the XS code that may be affected by MNG
-   compilation flags.
+   I'm pretty sure that I have *not* gotten all of the appropriate
+   #ifdef protection around parts of the XS code that may be affected
+   by MNG compilation flags.
    
 
 =head1 CHANGES AND FUTURE DEVELOPMENT
 
-   This is pre-alpha software.  Expect the worst.  Hope for the best.
+   This is alpha software.  Expect the worst.  Hope for the best.
 
    For any functions that return or accept an array of integers or 
    structs, I plan (eventually) to provide a Perl interface that accepts 
@@ -1436,6 +1691,16 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
    represented as arrays or hashes).  Right now, you'll need to pack() 
    and unpack() the string.
 
+   I may add a convenience method to insert PNG or JNG files into the
+   MNG stream.  This would make use of getchunk_*() and putchunk_*()
+   methods.
+
+   I need to add a questionaire to the Makefile.PL script to ask the
+   user how the libmng was built.  I may also automate a search for
+   the appropriate header files, and prompt the user if they can't
+   be found.  This interaction may look much like the setup/install
+   scripts for GD or PPM.
+   
 
 =head1 AUTHOR
 
@@ -1444,10 +1709,10 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
 
 =head1 SUPPORT
 
-   I'd love to support this interface full time, but my work schedule won't
-   allow that.  If you see a problem, try to fix it.  If you can fix it,
-   write a test case for it.  If you get all of that done, send me the fix 
-   and the test case, and I'll include it in the next release.
+   I'd love to support this interface full time, but my work schedule
+   won't allow that.  If you see a problem, try to fix it.  If you can
+   fix it, write a test case for it.  If you get all of that done, send
+   me the fix and the test case, and I'll include it in the next release.
 
    If you can't fix it, or don't know how to test it, go ahead and send 
    me some email.  I'll see what I can do.

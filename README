@@ -1,4 +1,4 @@
-Graphics::MNG version 0.03
+Graphics::MNG version 0.04
 ==========================
 
 
@@ -43,8 +43,8 @@ DESCRIPTION
    Please visit http://www.libmng.com/ to learn all about the new 
    MNG format.
 
-   MNG (which stands for Multiple Network Graphics) is a spin-off of 
-   the PNG format, which is already gaining popularity over the 
+   MNG (which stands for Multiple Network Graphics) is an extension  
+   of the PNG format, which is already gaining popularity over the 
    GIF format. MNG adds the aspect of animation that PNG lacks.
 
    The Gd module (by Lincoln Stein) supports PNG formats, but MNG is 
@@ -125,8 +125,8 @@ INTERFACE FUNCTIONS/METHODS
 
    The method initialize() currently takes only one argument -- a
    scalar (typically a reference) to user data.  If the MNG library is
-   compiled with MNG_INTERNAL_MEMMNGMT, then this Perl interface will
-   provide default memory allocation support.  You can use other
+   not compiled with MNG_INTERNAL_MEMMNGMT, then this Perl interface 
+   will provide default memory allocation support.  You can use other
    interface methods to enable/disable trace support.
 
    I've also added some new methods to the interface:
@@ -137,15 +137,15 @@ INTERFACE FUNCTIONS/METHODS
    -getchunk_name():
    This method takes the chunktype and returns the ASCII name of the 
    chunk, and also a string containing the hexadecimal representation of
-   the chunktype.  The $hHandle argument optional (to support the OO-I/F),
-   but is not used.  Consider this to be a class method.
+   the chunktype.  The $hHandle arg is optional (to support the OO-I/F),
+   and is not used.  Consider this to be a class method.
 
    -getchunk_info():
    This method uses the $iChunktype parameter to look up the correct
    getchunk_*() method to call on the $hHandle object to get the chunk
    information related to $hChunk.  It returns a list of status and a
-   hash reference containing all of the chunk information.  If called in a
-   scalar context, an array reference containing this list is returned.
+   hash reference containing all of the chunk information.  If called in
+   a scalar context, an array reference containing this list is returned.
    The key names of the hash correspond to the libmng parameter names for
    the appropriate mng_getchunk_*() function.
 
@@ -165,7 +165,7 @@ INTERFACE FUNCTIONS/METHODS
    for a field named 'iChunktype'.
 
    If any fields are excluded, they default to '0', which (before
-   presentation to the libmng interface)will translate to a string for
+   presentation to the libmng interface) will translate to a string for
    array and pointer types, and will translate to zero for integer types.
    This seems safe because most arrays and pointer types are accompanied
    by a length field, which will also default to zero if it is excluded.
@@ -181,15 +181,15 @@ LIMITATIONS
    That means that you'll be working with callback functions.  Depending 
    on your point of view, that's a limitation.
 
-   If you want to write a file with the MNG library, you'll have to call
-   create() before writing chunks.  That's just how libmng works.  If you
-   forget, you'll be disappointed with the results.
+   If you want to write a file with the MNG library, you'll have to
+   call create() before writing chunks.  That's just how libmng works.
+   If you forget, you'll be disappointed with the results.
 
-   This Perl module is in the alpha stage of development.  That means that
-   you'll be lucky to compile it, let alone use it effectively without
-   tripping over bugs.
+   This Perl module is in the alpha stage of development.  That means
+   that you'll be lucky to compile it, let alone use it effectively
+   without tripping over bugs.
 
-   The MNG library has limitations of its own, please visit the MNG 
+   The MNG library may have limitations of its own, please visit the MNG 
    homepage to learn about them.
 
 
@@ -211,7 +211,7 @@ PREREQUISITES/DEPENDENCIES
 
 INSTALLATION
 
-   Since this is pre-alpha software...
+   Since this is alpha software...
    - compile the MNG as a static library (Win32) or as a shared library
    - edit Makefile.PL as appropriate for your header file and lib paths
 
@@ -246,35 +246,40 @@ TESTING
 KNOWN BUGS
 
    I have successfully read and written MNG files with this interface.
-   If you can't write (simple) MNG files, you may be doing something wrong.
-   See the section LIMITATIONS for related topics.
+   If you can't write (simple) MNG files, you may be doing something
+   wrong.  See the section LIMITATIONS for related topics.
 
-   You may have noticed that the "mng_" prefix has been removed from all of
-   the functions.  This was done to make the OO-I/F look prettier.  However,
-   if you import the functional interface, you'll get read() and write()
-   in your namespace, thus clashing with Perl's built-in functions.  I may 
-   change the name for these in the future (i.e. an interface deviation).
-   In the meantime, I suggest that you use sysread() and syswrite() in your
-   callbacks.  Even better, use the OO-I/F and don't import qw(:fns).  
+   You may have noticed that the "mng_" prefix has been removed from
+   all of the functions.  This was done to make the OO-I/F look
+   prettier.  However, if you import the functional interface, you'll
+   get read() and write() in your namespace, thus clashing with Perl's
+   built-in functions.  I may change the name for these in the future
+   (i.e. an interface deviation).  In the meantime, I suggest that you
+   use sysread() and syswrite() in your callbacks.  Even better, use
+   the OO-I/F and don't import qw(:fns).
 
-   I'm developing exclusively on Win32 for right now, although everything
+   I'm developing exclusively on Win32 for now, although everything
    *should* work well for any other platform that the MNG library
    supports.
 
-   I'm pretty sure that I have *not* gotten all of the appropriate #ifdef
-   protection around parts of the XS code that may be affected by MNG
-   compilation flags.
+   I'm pretty sure that I have *not* gotten all of the appropriate
+   #ifdef protection around parts of the XS code that may be affected
+   by MNG compilation flags.
    
 
 CHANGES AND FUTURE DEVELOPMENT
 
-   This is pre-alpha software.  Expect the worst.  Hope for the best.
+   This is alpha software.  Expect the worst.  Hope for the best.
 
    For any functions that return or accept an array of integers or 
    structs, I plan (eventually) to provide a Perl interface that accepts 
    an array of integers or structs (the structs themselves probably being 
    represented as arrays or hashes).  Right now, you'll need to pack() 
    and unpack() the string.
+
+   I may add a convenience method to insert PNG or JNG files into the
+   MNG stream.  This would make use of getchunk_*() and putchunk_*()
+   methods.
 
 
 AUTHOR
@@ -284,10 +289,10 @@ AUTHOR
 
 SUPPORT
 
-   I'd love to support this interface full time, but my work schedule won't
-   allow that.  If you see a problem, try to fix it.  If you can fix it,
-   write a test case for it.  If you get all of that done, send me the fix 
-   and the test case, and I'll include it in the next release.
+   I'd love to support this interface full time, but my work schedule
+   won't allow that.  If you see a problem, try to fix it.  If you can
+   fix it, write a test case for it.  If you get all of that done, send
+   me the fix and the test case, and I'll include it in the next release.
 
    If you can't fix it, or don't know how to test it, go ahead and send 
    me some email.  I'll see what I can do.

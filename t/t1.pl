@@ -8,7 +8,7 @@
 
 use strict;
 use Test;
-BEGIN { plan tests => 23 };
+BEGIN { plan tests => 24 };
 use Graphics::MNG;
 ok(1); # If we made it this far, we're ok.
 
@@ -19,6 +19,25 @@ ok(1); # If we made it this far, we're ok.
 
 use Graphics::MNG qw( MNG_OUTOFMEMORY MNG_INCLUDE_TRACE_PROCS MNG_NOCALLBACK );
 ok(1);   # loaded an export-ok constant
+
+
+# we purposely generate a warning, but we don't want to display it.
+my $actual_warnings = 0;
+sub trap_warnings;
+sub trap_warnings
+{
+   $SIG{'__WARN__'} = \&trap_warnings;
+
+   return unless @_;
+
+   if ( $_[0] =~ /wrong type for callback function/ )
+   {
+      $actual_warnings++;
+      return;
+   }
+
+   warn(@_);
+}
 
 my $global_called = undef;
 sub callback
@@ -106,6 +125,9 @@ sub oo_testing
       ok($bool,undef, "checking test callback function");
    }
 
+   # make sure we generated the right number of warnings
+   ok($actual_warnings,1,'intercepted warnings');
+
    my $stuff;
    my $in = 'hey';
    $stuff = $obj2->get_userdata();
@@ -123,7 +145,6 @@ sub oo_testing
    $stuff = $obj2->get_userdata();
    
 
-
    # -------------- these should be the last statements in this subroutine
    undef $obj2; 
    undef $obj1;
@@ -134,6 +155,7 @@ sub oo_testing
 ### here's where it all happens...
 
 
+trap_warnings();
 oo_testing();
 exit(0);
 

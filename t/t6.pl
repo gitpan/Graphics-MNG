@@ -28,7 +28,7 @@ ok(1); # If we made it this far, we're ok.
 # Insert your test code below, the Test module is use()ed here so read
 # its man page ( perldoc Test ) for help writing this test script.
 
-use Graphics::MNG qw( :chunk_names MNG_FUNCTIONINVALID MNG_ACCESS_CHUNKS MNG_STORE_CHUNKS );
+use Graphics::MNG qw( :util_fns :chunk_names MNG_FUNCTIONINVALID MNG_ACCESS_CHUNKS MNG_STORE_CHUNKS );
 ok(1);   # loaded an export-ok constant
 
 use FileHandle;
@@ -54,11 +54,12 @@ my @oldcount;
 
 if ( !MNG_ACCESS_CHUNKS || !MNG_STORE_CHUNKS )
 {
-   my $msg = "Your version of libmng is not built with both \n".
-             "MNG_ACCESS_CHUNKS and MNG_STORE_CHUNKS defined.\n".
-             "This test requires those features.  Please\n".
-             "adjust compiler definitions in Makefile.PL and/or\n".
-             "rebuild your version of libmng with these options.\n";
+   my $msg = <<EOF;
+   Your version of libmng is not built with both MNG_ACCESS_CHUNKS
+   and MNG_STORE_CHUNKS defined.  This test requires those features.
+   Please adjust compiler definitions in Makefile.PL and/or rebuild
+   your version of libmng with these options
+EOF
 
    print $msg;
    warn $msg;
@@ -100,7 +101,6 @@ sub get_count($)
 }
 
 
-
 #---------------------------------------------------------------------------
 sub main
 {
@@ -122,7 +122,8 @@ sub main
    # sparsly populate our object array
    foreach my $num (keys %hash)
    {
-      ( $rv, @png_objects->[$num] ) = readfile("$num.png");
+      ( $rv, @png_objects->[$num] ) =
+         FileReadChunks(get_filename("$num.png"));
       last unless $rv==MNG_NOERROR;
    }
    ok($rv,MNG_NOERROR,"reading in all PNG files");
@@ -130,7 +131,7 @@ sub main
    $rv = writefile(FILENAME);
    ok($rv,MNG_NOERROR,"writing the MNG file");
 
-   ($rv) = readfile(FILENAME);
+   ($rv) = FileReadChunks(get_filename(FILENAME));
    ok($rv,MNG_NOERROR,"re-read the MNG file");
 
    $rv = compare_files( FILENAME, CHECKNAME );
@@ -138,111 +139,6 @@ sub main
 
    # clean up
    unlink( get_filename(FILENAME) );
-}
-
-
-#---------------------------------------------------------------------------
-sub FileReadData
-{
-   my ( $hHandle, $pBuf, $iSize, $pRead ) = @_;
-   my $userdata = $hHandle->get_userdata();
-
-   # don't mix sysread() and syswrite() with anything else
-   $$pRead = sysread( $userdata->{'fh'}, $$pBuf, $iSize );
- # $$pRead = read( $userdata->{'fh'}, $$pBuf, $iSize );
-
- # warn("read $$pRead / $iSize bytes\n");
-   return MNG_TRUE;
-}
-
-#---------------------------------------------------------------------------
-sub FileWriteData
-{
-   my ( $hHandle, $pBuf, $iBuflen, $pWritten ) = @_;
-   my $userdata = $hHandle->get_userdata();
-
-   # don't mix sysread() and syswrite() with anything else
-   $$pWritten = syswrite($userdata->{'fh'}, $pBuf, $iBuflen);
- # $$pWritten = $userdata->{'fh'}->print( $pBuf );
-
- # warn("wrote $$pWritten / $iBuflen bytes\n");
-   return MNG_TRUE;
-}
-
-#---------------------------------------------------------------------------
-sub ProcessHeader
-{
-   my ( $hHandle, $iWidth, $iHeight ) = @_;
-   my $userdata = $hHandle->get_userdata();
-
- # warn("Processing file header\n");
-   $userdata->{'width'}  = $iWidth;
-   $userdata->{'height'} = $iHeight;
-   return MNG_TRUE;
-}
-
-#---------------------------------------------------------------------------
-sub OpenStream
-{
-   my ( $hHandle ) = @_;
-   my $userdata = $hHandle->get_userdata();
-   my $fn       = get_filename( $userdata->{'filename'} );
-   my $fperms   = $userdata->{'fperms'} || 'r';
-   my $rv       = MNG_FALSE;
-
- # warn("Opening file $fn with perms '$fperms' via callback");
-
-   my $fh = new FileHandle( $fn, $fperms );
-
-   $userdata->{'fh'} = $fh;
-
-   if ( defined $fh )
-   {
-      $fh->autoflush(1);
-      binmode($fh);
-      $rv = MNG_TRUE;
-   }
-
-   return $rv;
-}
-
-#---------------------------------------------------------------------------
-sub CloseStream
-{
-   my ( $hHandle ) = @_;
-   my $userdata = $hHandle->get_userdata();
-
- # warn("Closing file...\n");
-
-   $userdata->{'fh'}->close();
-   $userdata->{'fh'} = undef;
-
-   return MNG_TRUE;
-}
-
-#---------------------------------------------------------------------------
-sub IterateChunks
-{
-   my ( $hHandle, $hChunk, $iChunktype, $iChunkseq ) = @_;
-   my $userdata = $hHandle->get_userdata();
-
- # warn("Iterating chunks...\n");
-
-   my ($name,$type) = $hHandle->getchunk_name($iChunktype);
-   my ($rv, $info) = $hHandle->getchunk_info($hChunk,$iChunktype);
-
-   # add the sequence information
-   $info ||= {};
-   %$info->{'iChunkseq'} = $iChunkseq;
-
-   # store the chunk
-   push( @{$userdata->{'chunks'}}, $info ) if defined $rv && $rv==MNG_NOERROR();
-
-   # get palette and transparency information
-   $userdata->{'PLTE'} = $info if( $name eq 'PLTE' );
-   $userdata->{'tRNS'} = $info if( $name eq 'tRNS' );
-
-   return MNG_TRUE;
 }
 
 
@@ -279,39 +175,6 @@ sub compare_files
 }
 
 
-
-#---------------------------------------------------------------------------
-sub readfile
-{
-   my ($fn) = @_;
-   my $rv = MNG_NOERROR;
-   my $obj;
-   my $userdata;
-
-   $obj = Graphics::MNG::new();
-   $obj->set_userdata( { 'filename' => $fn,
-                         'fh'       => undef,
-                         'fperms'   => 'r',
-                         'width'    => 0,
-                         'height'   => 0,
-                         'chunks'   => [],
-                       } );
-
-   $rv ||= defined $obj ? MNG_NOERROR : -1;
-   $rv ||= $obj->setcb_openstream( \&OpenStream    );
-   $rv ||= $obj->setcb_closestream( \&CloseStream   );
-   $rv ||= $obj->setcb_processheader( \&ProcessHeader );
-   $rv ||= $obj->setcb_readdata( \&FileReadData  );
-   $rv ||= $obj->read();
-   $rv ||= $obj->iterate_chunks(0, \&IterateChunks );
-
-   return ($rv,$obj);
-}
-
-
-
-
-
 #---------------------------------------------------------------------------
 sub writefile
 {
@@ -336,8 +199,8 @@ sub writefile
       $width_all  = max($width_all,$width_this);
       $height_all = max($height_all,$height_this);
 
-      $PLTE = $userdata->{'PLTE'};
-      $tRNS = $userdata->{'tRNS'};
+      $PLTE = @{ $userdata->{'PLTE'} || [] }->[-1];
+      $tRNS = @{ $userdata->{'tRNS'} || [] }->[-1];
    }
 
    # now scale these numbers vertically or horizontally
@@ -356,10 +219,10 @@ sub writefile
                              } );
    ok($rv,MNG_NOERROR,"setting userdata");
 
-   $rv = $obj->setcb_openstream   ( \&OpenStream    );
+   $rv = $obj->setcb_openstream   ( \&FileOpenStream );
    ok($rv,MNG_NOERROR,"registering the openstream callback");
 
-   $rv = $obj->setcb_closestream  ( \&CloseStream   );
+   $rv = $obj->setcb_closestream  ( \&FileCloseStream );
    ok($rv,MNG_NOERROR,"registering the closestream callback");
 
    $rv = $obj->setcb_writedata    ( \&FileWriteData );
@@ -401,9 +264,6 @@ sub writefile
       {
          $firstmove ||= $object_id if $changed;
 
-         # ========================================================
-         # CONSIDER REWRITING THESE AS putchunk_info( {} ) methods
-         # ========================================================
          $rv = $obj->putchunk_info( MNG_UINT_DEFI,
                                     {
                                        iObjectid  => $object_id + $changed*100,
@@ -526,6 +386,7 @@ sub insert_chunks
 
    my $userdata = @png_objects->[$file]->get_userdata();
    my $chunks = $userdata->{'chunks'};
+
    foreach my $chunk ( @$chunks )
    {
       $rv = $obj->putchunk_info($chunk);

@@ -56,6 +56,7 @@ sub get_filename($)
    return $match || ( -d 't' ? "t/$fn" : $fn );
 }
 
+#---------------------------------------------------------------------------
 sub get_count($)
 {
    my ( $fn ) = @_;
@@ -68,6 +69,7 @@ sub get_count($)
    return $count;
 }
 
+#---------------------------------------------------------------------------
 sub main
 {
    my $width_all   = 0; 
@@ -207,10 +209,7 @@ sub main
 }
 
 
-#
-# Sub Routine
-#
-
+#---------------------------------------------------------------------------
 sub read_file
 {  # PNG Mode
    my ( $file ) = @_;
@@ -226,6 +225,7 @@ sub read_file
    return $content;
 }
 
+#---------------------------------------------------------------------------
 # generate the CRC Table
 sub MakeCrcTable(){
    my $crc;
@@ -248,6 +248,7 @@ sub MakeCrcTable(){
    return @crc_table;
 }
 
+#---------------------------------------------------------------------------
 # calculate a CRC
 {
    # private variable
@@ -271,7 +272,7 @@ sub MakeCrcTable(){
 }
 
 
-# 
+#---------------------------------------------------------------------------
 sub GetPNGinfo {
    my( $tmp, $widthRef, $heightRef ) = @_;
  # my( $tmp ) = @_;
@@ -302,7 +303,7 @@ sub GetPNGinfo {
    $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub makechunk {
    my($chunk_type, $chunk_data) = @_;
 
@@ -313,7 +314,7 @@ sub makechunk {
    return $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub makeDEFI {
    my ($object_id, $xpos, $ypos ) = @_;
    my ($dists, $chunk_data);
@@ -330,7 +331,7 @@ sub makeDEFI {
    return $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub MakeHeader {
    my ( $width, $height ) = @_;
 
@@ -350,7 +351,7 @@ sub MakeHeader {
    $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub makeMHDR {
    my ( $width, $height ) = @_;
    my ($dists, $chunk_data, $crc);
@@ -370,7 +371,7 @@ sub makeMHDR {
    return $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub makeMOVE {
    my( $first_id, $last_id, $delta_type, $x, $y ) = @_;
    my ($dists,$chunk_data);
@@ -386,7 +387,7 @@ sub makeMOVE {
    return $dists;
 }
 
-# 
+#---------------------------------------------------------------------------
 sub makeSHOW {
    my( $first_id, $last_id, $show_mode ) = @_;
    my ($dists,$chunk_data);
@@ -400,6 +401,7 @@ sub makeSHOW {
    return $dists;
 }
 
+#---------------------------------------------------------------------------
 sub make_numbers
 {
    eval { require Gd; };
