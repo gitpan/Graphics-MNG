@@ -88,6 +88,8 @@ EXPORTABLE CONSTANTS
    :errors            -- constants returned as error values
    :fns               -- functions for the MNG functional interface
    :misc              -- constants misc.  (MNG_SUSPEND*)
+   :util_fns          -- pure PERL default implementations of callback
+                         functions (see section "UTILITY FUNCTIONS" below)
    :version           -- functions to return various version numbers
                          (MNG,PNG,draft,etc.)
    :IJG               -- constants IJG parameters for compression
@@ -129,49 +131,112 @@ INTERFACE FUNCTIONS/METHODS
    will provide default memory allocation support.  You can use other
    interface methods to enable/disable trace support.
 
+
+
    I've also added some new methods to the interface:
+   my ($texterror)   = error_as_string([$hHandle,] MNG_NOERROR());
    my ($name, $type) = getchunk_name([$hHandle,] $iChunktype);
    my ($rv, $href)   = getchunk_info($hHandle, $hChunk, $iChunktype)
    my ($rv)          = putchunk_info($hHandle, [$iChunktype,] \%chunkHash)
 
-   -getchunk_name():
-   This method takes the chunktype and returns the ASCII name of the 
-   chunk, and also a string containing the hexadecimal representation of
-   the chunktype.  The $hHandle arg is optional (to support the OO-I/F),
-   and is not used.  Consider this to be a class method.
+   - error_as_string():
+     This method takes an mng_retcode and translates it into the
+     corresponding string.  For example, 0 => 'MNG_NOERROR'.
+     This class method may also be called as a function.
+  
+   - getchunk_name():
+     This method takes the chunktype and returns the ASCII name of the 
+     chunk, and also a string containing the hexadecimal representation 
+     of the chunktype.  This class method may also be called as a
+     function.
 
-   -getchunk_info():
-   This method uses the $iChunktype parameter to look up the correct
-   getchunk_*() method to call on the $hHandle object to get the chunk
-   information related to $hChunk.  It returns a list of status and a
-   hash reference containing all of the chunk information.  If called in
-   a scalar context, an array reference containing this list is returned.
-   The key names of the hash correspond to the libmng parameter names for
-   the appropriate mng_getchunk_*() function.
+   - getchunk_info():
+     This method uses the $iChunktype parameter to look up the correct
+     getchunk_*() method to call on the $hHandle object to get the chunk
+     information related to $hChunk.  It returns a list of status and a
+     hash reference containing all of the chunk information.  If called 
+     in a scalar context, an array reference containing this list is 
+     returned.  The key names of the hash correspond to the libmng 
+     parameter names for the appropriate mng_getchunk_*() function.
+  
+     There are two additional fields added to the returned hash:
+        'iChunktype' : the type as passed in by $iChunktype
+        'pChunkname' : the chunk name (from getchunk_name($iChunktype))
+  
+     This hash reference can be passed directly to putchunk_info().
 
-   There are two additional fields added to the returned hash:
-      'iChunktype' : the type as passed in by $iChunktype
-      'pChunkname' : the chunk name (from getchunk_name($iChunktype))
+   - putchunk_info():
+     This method uses the $iChunktype parameter to look up the correct
+     putchunk_*() method to call on the $hHandle object.  The key names
+     of the hash must correspond to the libmng parameter names for the
+     mng_putchunk_*() function that will be called.
+  
+     If the $iChunktype parameter is excluded, then the hash is examined
+     for a field named 'iChunktype'.
+  
+     If any fields are excluded, they default to '0', which (before
+     presentation to the libmng interface) will translate to a string 
+     for array and pointer types, and will translate to zero for integer 
+     types.  This seems safe because most arrays and pointer types are 
+     accompanied by a length field, which will also default to zero if
+     it is excluded.
+  
+     This method is mostly useful for directly copying chunks from one 
+     file to another in conjunction with the getchunk_info() method.
 
-   This hash reference can be passed directly to putchunk_info().
+UTILITY FUNCTIONS
 
-   -putchunk_info():
-   This method uses the $iChunktype parameter to look up the correct
-   putchunk_*() method to call on the $hHandle object.  The key names
-   of the hash must correspond to the libmng parameter names for the
-   mng_putchunk_*() function that will be called.
+   This section documents the list of added interfaces provided by the
+   MNG module which do not exist in libmng.  They have been added for
+   your convenience.  They can be imported under the ':util_fns' tag.
 
-   If the $iChunktype parameter is excluded, then the hash is examined
-   for a field named 'iChunktype'.
+   - FileOpenStream( $hHandle )
+     This is a default callback implementation for use with
+     setcb_openstream.
 
-   If any fields are excluded, they default to '0', which (before
-   presentation to the libmng interface) will translate to a string for
-   array and pointer types, and will translate to zero for integer types.
-   This seems safe because most arrays and pointer types are accompanied
-   by a length field, which will also default to zero if it is excluded.
+   - FileCloseStream( $hHandle )
+     This is a default callback implementation for use with
+     setcb_closestream.
 
-   This method is mostly useful for directly copying chunks from one file 
-   to another in conjunction with the getchunk_info() method.
+   - FileReadData( $hHandle, \$pBuf, $iSize, \$pRead )
+     This is a default callback implementation for use with
+     setcb_readdata.
+
+   - FileReadHeader( $hHandle, $iWidth, $iHeight )
+     This is a default callback implementation for use with
+     setcb_processheader.
+
+   - FileWriteData( $hHandle, $pBuf, $iBuflen, \$pWritten )
+     This is a default callback implementation for use with
+     setcb_writedata.
+
+   - FileIterateChunks( $hHandle, $hChunk, $iChunktype, $iChunkseq )
+     This is a default callback implementation for use with
+     iterate_chunks.
+
+   - FileReadChunks( $filename [, \&iteration_function] )
+
+     NOTE: This is not an object method.
+
+     This is a convenience function which will return a list of two
+     elements (status, MNG object). The userdata portion of the
+     returned MNG object will contain the following keys:
+
+     'filename' => <filename>,
+     'width'    => <width of image>,
+     'height'   => <height of image>,
+     'chunks'   => [ <list of image chunks> ],
+
+     You can specify your own chunk iteration function, or you can leave
+     it out and the default (FileIterateChunks()) will be used.
+
+   - FileWriteChunks( $filename, \@chunks )
+
+     NOTE: This is not an object method.
+
+     This is a convenience function which will accept a list of image 
+     chunks (as returned by FileReadChunks) and will write them to the
+     specified filename.  The status of the entire operation is returned.
 
 
 LIMITATIONS
@@ -281,6 +346,12 @@ CHANGES AND FUTURE DEVELOPMENT
    MNG stream.  This would make use of getchunk_*() and putchunk_*()
    methods.
 
+   I need to add a questionaire to the Makefile.PL script to ask the
+   user how the libmng was built.  I may also automate a search for
+   the appropriate header files, and prompt the user if they can't
+   be found.  This interaction may look much like the setup/install
+   scripts for GD or PPM.
+   
 
 AUTHOR
 
