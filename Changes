@@ -1,5 +1,11 @@
 Revision history for Perl extension Graphics::MNG.
 
+0.03  Fri Aug 10 20:09:48 2001
+	- Added support for compilation on cygwin platforms
+   - Added backwards-compatible support for libmng v1.0.3 (new I/F function)
+   - Updated documentation and test cases
+   - Fixed case of filenames in .tar.gz distribution
+
 0.02  Fri Aug 10 20:09:48 2001
 	- Updated documentation
 

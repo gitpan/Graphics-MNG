@@ -17,7 +17,7 @@ ok(1); # If we made it this far, we're ok.
 # Insert your test code below, the Test module is use()ed here so read
 # its man page ( perldoc Test ) for help writing this test script.
 
-use Graphics::MNG qw( MNG_FUNCTIONINVALID );
+use Graphics::MNG qw( MNG_FUNCTIONINVALID MNG_ACCESS_CHUNKS MNG_STORE_CHUNKS );
 ok(1);   # loaded an export-ok constant
 
 use FileHandle;
@@ -27,6 +27,19 @@ use Data::Dumper;
 # use constant FILENAME     => 'linux.mng';
   use constant OUT_FILENAME => 'tempfile.mng';
 
+
+if ( !MNG_ACCESS_CHUNKS || !MNG_STORE_CHUNKS )
+{
+   my $msg = "Your version of libmng is not built with both \n".
+             "MNG_ACCESS_CHUNKS and MNG_STORE_CHUNKS defined.\n".
+             "This test requires those features.  Please\n".
+             "adjust compiler definitions in Makefile.PL and/or\n".
+             "rebuild your version of libmng with these options.\n";
+
+   print $msg;
+   warn $msg;
+   exit(0);
+}
 
 # open(STDERR,">log.txt");
 main();
@@ -221,7 +234,7 @@ sub ProcessHeader
    my ( $hHandle, $iWidth, $iHeight ) = @_;
    my $userdata = $hHandle->get_userdata();
 
- # warn("Processing file header\n");
+ # warn("Processing file header ($iWidth/$iHeight)\n");
    $userdata->{'width'}  = $iWidth;
    $userdata->{'height'} = $iHeight;
    return MNG_TRUE;
@@ -248,6 +261,10 @@ sub OpenStream
       binmode($fh);
       $rv = MNG_TRUE;
    }
+   else
+   {
+      warn("Failed to open $fn!");
+   }
 
    return $rv;
 }
@@ -258,7 +275,7 @@ sub CloseStream
    my ( $hHandle ) = @_;
    my $userdata = $hHandle->get_userdata();
 
- # warn("Closing file...\n");
+ # warn("Closing file $$userdata{'filename'}...\n");
 
    $userdata->{'fh'}->close();
    $userdata->{'fh'} = undef;

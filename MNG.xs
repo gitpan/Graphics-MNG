@@ -20,11 +20,8 @@
 #include "XSUB.h"
 
 // need to fix lcms.h conditions...
-// #ifndef FAR
-// #define FAR far
-// #endif
 #if defined(WIN32)
-#include <windows.h>
+//#include <windows.h>
 #endif
 #include <Lcms.h>
 #include <libmng.h>
@@ -5673,6 +5670,13 @@ constant_MNG_INTER(char *name, int len, int arg)
 	    goto not_there;
 #endif
 	}
+	if (strEQ(name + 9, "NAL_MEMMNGMT")) {	/* MNG_INTER removed */
+#ifdef MNG_INTERNAL_MEMMNGMT
+	    return 1; // MNG_INTERNAL_MEMMNGMT; 
+#else
+	    return 0; // goto not_there;
+#endif
+	}
     }
     errno = EINVAL;
     return 0;
@@ -6576,6 +6580,41 @@ static char * _MNG_GETCANVASLINE_ONESHOT = "getcanvasline_oneshot";
 // typedef to replace mng_handle when we don't want to treat it as an object (i.e. hChunks)
 typedef void * mng_chunkhandle;
 
+
+//==============================================================================
+//                   I/F functions that are version dependent
+//==============================================================================
+// new functions for v1.0.3
+#if (    ((MNG_VERSION_MAJOR  > 1))                                                           \
+      || ((MNG_VERSION_MAJOR == 1) && (MNG_VERSION_MINOR  > 0))                               \
+      || ((MNG_VERSION_MAJOR == 1) && (MNG_VERSION_MINOR == 0) && (MNG_VERSION_RELEASE >= 3)) \
+    )
+#define _MNG_GET_LASTBACKCHUNK(hndl,red,green,blue,mand) (mng_get_lastbackchunk((hndl),(red),(green),(blue),(mand)))
+#else
+#define _MNG_GET_LASTBACKCHUNK(hndl,red,green,blue,mand) \
+      (warn("mng_get_lastbackchunk() is not implemented in this version of libmng\n" \
+               "Please update your version of libmng to at least 1.0.3\n"),          \
+       MNG_FUNCTIONINVALID)
+#endif
+
+
+
+//==============================================================================
+//                   Min / Max Macros
+//==============================================================================
+#ifndef min
+#define min(x,y) ((x)<(y)?(x):(y))
+#endif
+
+#ifndef max
+#define max(x,y) ((x)>(y)?(x):(y))
+#endif
+
+
+//==============================================================================
+//                   Convenience Macros
+//==============================================================================
+
 // this is used in the typemap file
 #define _MNG_GET_HANDLE(arg) (*(hv_fetch((HV*)SvRV((arg)), _MNG_HANDLE, strlen(_MNG_HANDLE), 0)))
 
@@ -6732,12 +6771,16 @@ int store_cbfn( mng_handle hHandle, const char * fnname, SV *cbfn )
 /* memory management callbacks */
 static mng_ptr MNG_DECL _mng_memalloc (mng_size_t  iLen)
 {
-   return (mng_ptr) malloc( iLen );
+   mng_ptr rv = (mng_ptr) malloc( iLen );
+// my_warn("mng_memalloc: called for %d bytes, returning 0x%p\n", iLen, rv);
+   memset( rv, 0, iLen );
+   return rv;
 }
 
 static void MNG_DECL _mng_memfree (mng_ptr     iPtr,
                                    mng_size_t  iLen)
 {
+// my_warn("mng_memfree: releasing %d bytes from 0x%p\n", iLen, iPtr);
    free( iPtr );
    return;
 }
@@ -7570,6 +7613,7 @@ mng_initialize(userdata=&PL_sv_undef)
 
       if ( c_hHandle == 0 )
       {
+         my_warn("mng_initialize: returned NULL handle");
          XSRETURN_UNDEF;
       }
 
@@ -9005,6 +9049,30 @@ mng_get_imagelevel(hHandle)
    mng_handle hHandle
    PROTOTYPE: $
 
+mng_retcode
+mng_get_lastbackchunk(hHandle)
+   mng_handle hHandle
+   PROTOTYPE: $
+   PREINIT:
+      mng_retcode  c_rv;
+      mng_uint16   c_iRed       = 0;
+      mng_uint16   c_iGreen     = 0;
+      mng_uint16   c_iBlue      = 0;
+      mng_uint8    c_iMandatory = 0;
+
+   PPCODE:
+      // this function was introduced in v1.0.3
+      c_rv = _MNG_GET_LASTBACKCHUNK(hHandle,&c_iRed,&c_iGreen,&c_iBlue,&c_iMandatory);
+
+      XPUSHs( sv_2mortal( newSViv( c_rv ) ) );
+      if ( c_rv == MNG_NOERROR )
+      {
+         XPUSHs( sv_2mortal( newSViv( c_iRed          ) ) );
+         XPUSHs( sv_2mortal( newSViv( c_iGreen        ) ) );
+         XPUSHs( sv_2mortal( newSViv( c_iBlue         ) ) );
+         XPUSHs( sv_2mortal( newSViv( c_iMandatory    ) ) );
+      }
+
 
 mng_uint32
 mng_get_starttime(hHandle)
@@ -9387,7 +9455,7 @@ mng_getchunk_ztxt(hHandle,hChunk)
       mng_uint32       c_iKeywordsize  = 0;
       mng_pchar        c_zKeyword      = NULL;
       mng_uint8        c_iCompression  = 0;
-      mng_uint32       c_iTextsize     = NULL;
+      mng_uint32       c_iTextsize     = 0;
       mng_pchar        c_zText         = NULL;
 
    PPCODE:

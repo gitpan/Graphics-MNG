@@ -8,7 +8,7 @@
 
 use strict;
 use Test;
-BEGIN { plan tests => 21 };
+BEGIN { plan tests => 23 };
 use Graphics::MNG;
 ok(1); # If we made it this far, we're ok.
 
@@ -17,7 +17,7 @@ ok(1); # If we made it this far, we're ok.
 # Insert your test code below, the Test module is use()ed here so read
 # its man page ( perldoc Test ) for help writing this test script.
 
-use Graphics::MNG qw( MNG_OUTOFMEMORY );
+use Graphics::MNG qw( MNG_OUTOFMEMORY MNG_INCLUDE_TRACE_PROCS MNG_NOCALLBACK );
 ok(1);   # loaded an export-ok constant
 
 my $global_called = undef;
@@ -52,11 +52,11 @@ sub oo_testing
    undef $dataref;
 
    $rv = $obj1->setcb_traceproc( \&trace_fn );
-   ok( $rv, MNG_NOERROR, "testing setcb_traceproc()" );
+   ok( $rv, (MNG_INCLUDE_TRACE_PROCS() ? MNG_NOERROR : MNG_NOCALLBACK), "testing setcb_traceproc()" );
    $rv = $obj1->setcb_traceproc( \&trace_fn );
-   ok( $rv, MNG_NOERROR, "testing setcb_traceproc()" );
+   ok( $rv, (MNG_INCLUDE_TRACE_PROCS() ? MNG_NOERROR : MNG_NOCALLBACK), "testing setcb_traceproc()" );
    $rv = $obj1->setcb_traceproc( undef );
-   ok( $rv, MNG_NOERROR, "testing setcb_traceproc()" );
+   ok( $rv, (MNG_INCLUDE_TRACE_PROCS() ? MNG_NOERROR : MNG_NOCALLBACK), "testing setcb_traceproc()" );
 
 
 
@@ -74,8 +74,12 @@ sub oo_testing
    ok( $$rv, $data, "checking OO::get_userdata()" );
 
    # test inline'd functions from XS
-   ok( $obj1->version_text(), "1.0.2", "testing mng_version_text()" );
-   ok( $obj1->version_major(), 1, "testing mng_version_major()" );
+   my $version_text = $obj1->version_text() || '';
+   my ( $major, $minor, $release ) =  $version_text =~ m/^(1).(0).([23])$/;
+   ok( ($version_text ne ""), 1, "testing mng_version_text()" );
+   ok( $obj1->version_major(), $major, "testing mng_version_major()" );
+   ok( $obj1->version_minor(), $minor, "testing mng_version_minor()" );
+   ok( $obj1->version_release(), $release, "testing mng_version_release()" );
 
 
    # make sure that the capitalized constant functions still exist

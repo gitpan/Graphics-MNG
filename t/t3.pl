@@ -49,7 +49,7 @@ sub constants_testing()
             }
             elsif ( $@ =~ /not enough arguments/i )
             {
-               skip( "$item (in $category) needs args, probably OK" );
+               skip( "$item (in $category) needs args, probably OK",1 );
             }
             elsif ( $@ =~ /syntax error/i )
             {

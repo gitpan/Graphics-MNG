@@ -3,27 +3,54 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 
 use strict;
+use English;
 my $namespace = 'Graphics::MNG';
 my $author    = 'dpmott@sep.com';
 my $modname   = 'MNG.pm';
 
 # this references header files in the package.  You may want to change these...
-my @libs = ( '-Llib -llibmng.lib' );
-my $incs = ' -I. -Iinclude ';
-my $defs = ' -DMNG_FULL_CMS -DMNG_USE_SO -DNON_WINDOWS -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE ';
+my ( $incs, $defs, @libs );
 
-# this is where I build it on my machine...
-# my @libs = ( '-L../../../libmng/Release -llibmng.lib' );
-# my $incs = ' -I. -I..\..\..\Gd\jpeg-6b -I..\..\..\Gd\zlib-1.1.3 -I..\..\..\libmng\libmng -I..\..\..\libmng\lcms\src ';
-# my $defs = ' -DMNG_FULL_CMS -DMNG_USE_SO -DNON_WINDOWS -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE ';
+if ( $OSNAME =~ /win32/i )
+{
+   # I like you, so I'm going to link with a precompiled library that I've provided just for you!
+   @libs = ( '-Llib -llibmng.lib' );
+   $incs = ' -I. -Iinclude ';
+   $defs = ' -DMNG_SUPPORT_FULL -DMNG_FULL_CMS -DMNG_USE_SO -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE -DNON_WINDOWS ';
 
-# I can't seem to link to the official Win32 libmng.dll ...
-# with these settings, and using the libmng.lib from the contrib/msvc/win32dll
-# directory, I get 8 linker errors concerning unresolved symbols.
-# I have been unable to generate a suitable implib for use with the DLL.
-# my @libs = ( '-Llib -llibmng.lib' );
-# my $incs = ' -I. -I..\..\..\Gd\jpeg-6b -I..\..\..\Gd\zlib-1.1.3 -I..\..\..\libmng\libmng -I..\..\..\libmng\lcms\src ';
-# my $defs = ' -DMNG_FULL_CMS -DMNG_USE_DLL ';
+   # I'm doing that because I can't seem to link to the official Win32 libmng.dll!
+   # I have been unable to generate a suitable implib for use with the DLL.
+   # Help is welcome!
+   # @libs = ( '-Llib -llibmng.lib' );
+   # $incs = ' -I. -I../../../Gd/jpeg-6b -I../../../Gd/zlib-1.1.3 -I../../../libmng/libmng -I../../../libmng/lcms/src ';
+   # $defs = ' -DMNG_SUPPORT_FULL -DMNG_FULL_CMS -DMNG_USE_DLL -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE ';
+}
+elsif ( $OSNAME =~ /cygwin/i )
+{
+   @libs = ( '-L/usr/lib -lmng -ljpeg -lz -lLcms' );
+   $incs = '-I. -I/usr/include';
+   $defs = ' -DMNG_SUPPORT_FULL -DMNG_FULL_CMS -DMNG_USE_SO -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE ';
+}
+else
+{
+   # warn the user
+   warn((" -=WARNING=- ") x 5, "\n");
+   warn("I couldn't figure out what OS you're using, or I don't support it.\n".
+        "You should edit your Makefile.PL and change the include and lib paths!\n");
+
+   # this is where I build it on my machine...
+   @libs = ( '-L../../../libmng/Release -llibmng.lib' );
+   $incs = ' -I. -I../../../Gd/jpeg-6b -I../../../Gd/zlib-1.1.3 -I../../../libmng/libmng -I../../../libmng/lcms/src ';
+   $defs = ' -DMNG_FULL_CMS -DMNG_USE_SO -DNON_WINDOWS -DMNG_INTERNAL_MEMMNGMT -DMNG_SUPPORT_TRACE ';
+}
+
+
+# fix pathnames for the OS
+if ( $OSNAME =~ /win32/i )
+{
+   $incs =~ s,\\,/,g;
+   grep { s,\\,/,g } @libs;
+}
 
 
 

@@ -1,5 +1,19 @@
 #!perl
 #
+#   Most of this script has been copied from another source, and some of
+#   the content has been modified to fit a particular purpose.
+#
+#   The web page that hosts the original source is all in japanese,
+#   but it does say this at the bottom:
+#   Copyright(C) COCKY(cocky@cocky.to), All Rights Reserved. 
+#
+#   So, inclusion of this script may violate a copyright somewhere.
+#   I'd suggest that you do *not* assume that you can distribute this
+#   file under the same terms as PERL itself.  It's probably a bad idea.
+#   Don't do that.
+#
+#   Here's the original file header:
+#
 #   MNGcount Plus Ver.0.02
 #      akihiro@ua.airnet.ne.jp
 #      http://www5.airnet.ne.jp/dct/

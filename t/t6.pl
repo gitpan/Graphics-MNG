@@ -28,7 +28,7 @@ ok(1); # If we made it this far, we're ok.
 # Insert your test code below, the Test module is use()ed here so read
 # its man page ( perldoc Test ) for help writing this test script.
 
-use Graphics::MNG qw( :chunk_names MNG_FUNCTIONINVALID );
+use Graphics::MNG qw( :chunk_names MNG_FUNCTIONINVALID MNG_ACCESS_CHUNKS MNG_STORE_CHUNKS );
 ok(1);   # loaded an export-ok constant
 
 use FileHandle;
@@ -50,6 +50,21 @@ my $vstyle = 0;
 my @png_objects;
 my @count;
 my @oldcount;
+
+
+if ( !MNG_ACCESS_CHUNKS || !MNG_STORE_CHUNKS )
+{
+   my $msg = "Your version of libmng is not built with both \n".
+             "MNG_ACCESS_CHUNKS and MNG_STORE_CHUNKS defined.\n".
+             "This test requires those features.  Please\n".
+             "adjust compiler definitions in Makefile.PL and/or\n".
+             "rebuild your version of libmng with these options.\n";
+
+   print $msg;
+   warn $msg;
+   exit(0);
+}
+
 
 # open(STDERR,">log1.txt");
 main();

@@ -903,4 +903,3 @@ WORD cdecl Clamp_ab(Fixed32 in);
 #endif
 #endif
 
-

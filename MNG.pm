@@ -674,6 +674,7 @@ our %EXPORT_TAGS = (
       get_suspensionmode
       get_speed
       get_imagelevel
+      get_lastbackchunk
       get_starttime
       get_runtime
       get_currentframe
@@ -820,7 +821,7 @@ our @EXPORT    = (
                     qw(getchunk_name)  # this can be a class or object method :)
                  );
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 sub AUTOLOAD {
     # This AUTOLOAD is used to 'autoload' constants from the constant()
@@ -1381,6 +1382,27 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
    make install
 
 
+=head1 TESTING
+
+   There is a suite of tests packaged with this module.  Test #0 is 
+   really just a setup script that has been pieced together from other 
+   sources.  It uses pure PERL to generate a test case MNG file for 
+   later tests.  If you have GD, it will also generate the necessary
+   PNG images.
+
+   Since all of the output of this script is already packaged in the
+   distribution, you probably won't need to run it.  It's just there
+   for your reference and my convenience.
+
+   The last couple of tests actually read and write MNG files.  There 
+   are some good examples in there, it's worth checking out.
+
+   If you're on cygwin, 'make test' may not work correctly.  If it
+   complains about not being able to open up t/*.t, just type this 
+   at the command prompt in the Graphics/MNG directory:
+      perl -Mblib test.pl
+
+
 =head1 KNOWN BUGS
 
    I have successfully read and written MNG files with this interface.
@@ -1462,11 +1484,18 @@ Graphics::MNG - Perl extension for the MNG library from Gerard Juyn (gerard@libm
 =head1 SEE ALSO
 
    L<perl>.
-   The Gd module.
    The PNG homepage:      http://www.libpng.org/pub/png/
-   The PNG specification: http://www.libpng.org/pub/png/spec/
    The MNG homepage:      http://www.libmng.com/
+   The PNG specification: http://www.libpng.org/pub/png/spec/
    The MNG specification: http://www.libpng.org/pub/mng/spec/
+
+   The JPEG homepage:     http://www.ijg.org/
+   The Lcms homepage:     http://www.littlecms.com/ 
+   The Zlib homepage:     http://www.gzip.org/zlib/
+
+   The GD module:         [download it from your favorite CPAN server]
+   The GD homepage:       http://www.boutell.com/gd/
+   The Freetype homepage: http://www.freetype.org/
 
 =cut
 
